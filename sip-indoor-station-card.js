@@ -55,6 +55,48 @@ class SipIndoorStationCard extends HTMLElement {
     this._renderState();
   }
 
+  connectedCallback() {
+    customElements.whenDefined("advanced-camera-card").then(() => {
+      setTimeout(() => {
+        const cameraCard = this.shadowRoot?.getElementById("camera-card");
+        if (!cameraCard || cameraCard.dataset.hardReloadFixed) return;
+        cameraCard.dataset.hardReloadFixed = "true";
+
+        const parentContainer = cameraCard.parentNode;
+        if (parentContainer && this._hass) {
+          const activeCamCard = document.createElement("advanced-camera-card");
+          activeCamCard.id = "camera-card";
+          activeCamCard.hass = this._hass;
+
+          if (typeof this._configureAdvancedCameraCard === 'function') {
+            const originalGet = this.shadowRoot.getElementById;
+            this.shadowRoot.getElementById = (id) => id === "camera-card" ? activeCamCard : originalGet.call(this.shadowRoot, id);
+            this._configureAdvancedCameraCard();
+            this.shadowRoot.getElementById = originalGet;
+          }
+
+          const compiledConfig = activeCamCard._config || activeCamCard.config;
+          if (compiledConfig) {
+            activeCamCard.setConfig({
+              ...compiledConfig,
+              _boot_tick: Date.now()
+            });
+          }
+
+          parentContainer.replaceChild(activeCamCard, cameraCard);
+
+          setTimeout(() => {
+            if (typeof activeCamCard.requestUpdate === 'function') {
+              activeCamCard.requestUpdate();
+            }
+            window.dispatchEvent(new Event('resize'));
+            activeCamCard.dispatchEvent(new Event('resize', { bubbles: true }));
+          }, 50);
+        }
+      }, 500);
+    });
+  }
+
   disconnectedCallback() {
     this._disconnectAudio();
   }
